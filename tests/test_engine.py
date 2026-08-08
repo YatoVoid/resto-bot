@@ -96,6 +96,17 @@ def test_area_with_no_matching_candidates_does_not_loop_forever(restaurant, down
     assert "What name" in r5
 
 
+def test_table_id_matches_without_dash_or_case(restaurant, downtown):
+    engine = Engine(restaurant, downtown, StubUnderstander([]))
+    engine.slots = {"party_size": 2, "date": "2026-08-10", "time": "19:00"}
+    engine.candidates = [t for t in downtown.all_tables() if t.id == "D-G1"]
+
+    reply = engine.handle_message("dg1")
+
+    assert engine.slots["table_id"] == "D-G1"
+    assert "What name" in reply
+
+
 def test_full_booking_flow_produces_accurate_summary(restaurant, downtown):
     stub = StubUnderstander([
         {"intent": "booking", "reply": "What date works?",

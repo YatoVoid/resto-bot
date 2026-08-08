@@ -20,6 +20,8 @@ AREA_SYNONYMS = {
 
 NAME_PATTERNS = [
     re.compile(r"\bmy name is ([a-z][a-z'-]*(?:\s[a-z][a-z'-]*)?)", re.IGNORECASE),
+    re.compile(r"\bname'?s ([a-z][a-z'-]*(?:\s[a-z][a-z'-]*)?)", re.IGNORECASE),
+    re.compile(r"\bname is ([a-z][a-z'-]*(?:\s[a-z][a-z'-]*)?)", re.IGNORECASE),
     re.compile(r"\bunder the name ([a-z][a-z'-]*(?:\s[a-z][a-z'-]*)?)", re.IGNORECASE),
     re.compile(r"\bit'?s ([a-z][a-z'-]*(?:\s[a-z][a-z'-]*)?)$", re.IGNORECASE),
     re.compile(r"\bthis is ([a-z][a-z'-]*(?:\s[a-z][a-z'-]*)?)$", re.IGNORECASE),

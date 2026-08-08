@@ -40,6 +40,26 @@ def test_bare_number_ignored_once_party_size_already_known():
     assert "party_size" not in result["slots"]
 
 
+def test_bare_word_answers_name_question_once_table_is_chosen():
+    understand, _, _ = _understander()
+    known = {"party_size": 2, "date": "2026-08-10", "time": "19:00", "table_id": "D-G1"}
+    result = understand([], "wali", known)
+    assert result["slots"]["name"] == "Wali"
+
+
+def test_bare_word_not_treated_as_name_before_table_chosen():
+    understand, _, _ = _understander()
+    known = {"party_size": 2, "date": "2026-08-10", "time": "19:00"}
+    result = understand([], "wali", known)
+    assert "name" not in result["slots"]
+
+
+def test_name_is_phrasing_extracts_name():
+    understand, _, _ = _understander()
+    result = understand([], "name is Wali", {})
+    assert result["slots"].get("name") == "Wali"
+
+
 def test_hours_question_returns_real_hours():
     understand, _, loc = _understander()
     result = understand([], "what are your hours", {})

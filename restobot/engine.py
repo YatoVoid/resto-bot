@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Callable
 
 from restobot.availability import Booking, BookingError
@@ -42,9 +43,9 @@ class Engine:
         return any(trigger.lower() in lowered for trigger in self.restaurant.manager_triggers)
 
     def _match_table_id(self, text: str) -> Table | None:
-        upper = text.upper()
+        normalized = re.sub(r"[^A-Z0-9]", "", text.upper())
         for t in self.candidates:
-            if t.id.upper() in upper:
+            if re.sub(r"[^A-Z0-9]", "", t.id.upper()) in normalized:
                 return t
         return None
 
