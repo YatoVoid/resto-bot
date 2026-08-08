@@ -41,6 +41,13 @@ def test_address_question_returns_real_address():
     assert loc.address in result["reply"]
 
 
+def test_where_is_your_location_returns_real_address():
+    understand, _, loc = _understander()
+    result = understand([], "where is your location ?", {})
+    assert result["intent"] == "question"
+    assert loc.address in result["reply"]
+
+
 def test_price_question_returns_real_price_note():
     understand, _, loc = _understander()
     result = understand([], "how much for a window table", {})

@@ -9,7 +9,7 @@ from restobot.nlu_stub import extract_slots
 BOOKING_WORDS = ("book", "table", "reserve", "reservation", "party")
 EXTEND_WORDS = ("extend", "longer", "more time", "push back")
 HOURS_WORDS = ("hour", "hours", "open", "close", "when do you")
-ADDRESS_WORDS = ("address", "where are you", "located")
+ADDRESS_WORDS = ("address", "where are you", "located", "location")
 CUISINE_WORDS = ("cuisine", "what food", "kind of food", "menu")
 PRICE_WORDS = ("price", "cost", "how much", "minimum spend", "fee")
 
