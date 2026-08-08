@@ -1,0 +1,38 @@
+# Copy this file, fill in your own details, point --config at it.
+# Delete anything you don't need. manager_triggers and price_note are
+# both optional, leave them out entirely if they don't apply.
+
+name: Your Restaurant Name
+cuisine: what kind of food you serve
+
+manager_triggers:
+  - catering
+  - complaint
+  - allergy
+
+locations:
+  - name: Main
+    address: 123 Main Street
+    hours: "Mon-Sun 11:00-22:00"
+    busy_hours: "Fri-Sat evenings fill up fast"
+    floors:
+      - name: Ground floor
+        tables:
+          - id: T1
+            capacity: 2
+            area: window
+            price_note: "$10pp minimum spend"
+          - id: T2
+            capacity: 4
+            area: regular
+          - id: T3
+            capacity: 6
+            area: private
+            notes: closed off room, good for groups
+            price_note: "$100 room fee"
+      - name: Patio
+        tables:
+          - id: T4
+            capacity: 4
+            area: patio
+            price_note: "heated in winter"

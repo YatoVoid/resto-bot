@@ -6,6 +6,7 @@ import pytest
 from restobot.config import load_restaurant, ConfigError
 
 DEMO_PATH = os.path.join(os.path.dirname(__file__), "..", "config", "demo_restaurant.yaml")
+TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "..", "config", "template_restaurant.yaml")
 
 
 def test_loads_demo_restaurant():
@@ -38,6 +39,14 @@ def test_price_note_defaults_to_empty_string():
     downtown = r.get_location("Downtown")
     regular = next(t for t in downtown.all_tables() if t.id == "D-G3")
     assert regular.price_note == ""
+
+
+def test_template_config_parses_as_is():
+    r = load_restaurant(TEMPLATE_PATH)
+    assert r.single_location()
+    location = r.locations[0]
+    assert len(location.floors) == 2
+    assert len(location.all_tables()) == 4
 
 
 def test_single_location_restaurant():

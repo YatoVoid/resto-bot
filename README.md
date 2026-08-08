@@ -77,8 +77,10 @@ network access or an API key.
 
 ## Customizing a restaurant
 
-Everything about a restaurant lives in one YAML file, see
-`config/demo_restaurant.yaml` for a full two-location example. Shape:
+Everything about a restaurant lives in one YAML file. Copy
+`config/template_restaurant.yaml` to start from a blank, commented
+skeleton, or look at `config/demo_restaurant.yaml` for a full
+two-location example already filled in. Shape:
 
 ```yaml
 name: Your Restaurant
