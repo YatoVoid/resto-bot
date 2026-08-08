@@ -49,10 +49,30 @@ def test_price_question_returns_real_price_note():
     assert priced.price_note in result["reply"]
 
 
+def test_coffee_is_not_misread_as_a_price_question():
+    understand, _, _ = _understander()
+    result = understand([], "do you have good coffee", {})
+    assert result["intent"] == "irrelevant"
+
+
+def test_toffee_alone_is_not_misread_as_a_price_question():
+    understand, _, _ = _understander()
+    result = understand([], "do you serve toffee desserts", {})
+    assert result["intent"] == "irrelevant"
+
+
 def test_extend_text_returns_extend_intent():
     understand, _, _ = _understander()
     result = understand([], "can we extend our table, longer please", {})
     assert result["intent"] == "extend"
+
+
+def test_multi_word_phrase_still_matches_after_boundary_fix():
+    understand, _, loc = _understander()
+    result = understand([], "how much would a window table run", {})
+    assert result["intent"] == "question"
+    priced = next(t for t in loc.all_tables() if t.price_note)
+    assert priced.price_note in result["reply"]
 
 
 def test_gibberish_returns_irrelevant():

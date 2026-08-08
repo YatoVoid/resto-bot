@@ -1,15 +1,21 @@
 from __future__ import annotations
 
+import re
+
 from restobot.config import Location, Restaurant
 from restobot.engine import UnderstandFn
 from restobot.nlu_stub import extract_slots
 
 BOOKING_WORDS = ("book", "table", "reserve", "reservation", "party")
 EXTEND_WORDS = ("extend", "longer", "more time", "push back")
-HOURS_WORDS = ("hour", "open", "close", "when do you")
+HOURS_WORDS = ("hour", "hours", "open", "close", "when do you")
 ADDRESS_WORDS = ("address", "where are you", "located")
 CUISINE_WORDS = ("cuisine", "what food", "kind of food", "menu")
 PRICE_WORDS = ("price", "cost", "how much", "minimum spend", "fee")
+
+
+def _matches(lowered: str, words: tuple[str, ...]) -> bool:
+    return any(re.search(rf"\b{re.escape(w)}\b", lowered) for w in words)
 
 
 def build_offline_understander(restaurant: Restaurant, location: Location) -> UnderstandFn:
@@ -18,7 +24,7 @@ def build_offline_understander(restaurant: Restaurant, location: Location) -> Un
         lowered = text.lower()
         merged = {**known_slots, **slots}
 
-        if any(w in lowered for w in EXTEND_WORDS):
+        if _matches(lowered, EXTEND_WORDS):
             if "name" not in merged:
                 reply = "Who's the reservation under?"
             elif "date" not in merged:
@@ -27,16 +33,16 @@ def build_offline_understander(restaurant: Restaurant, location: Location) -> Un
                 reply = ""
             return {"intent": "extend", "reply": reply, "slots": slots}
 
-        if any(w in lowered for w in HOURS_WORDS):
+        if _matches(lowered, HOURS_WORDS):
             return {"intent": "question", "reply": f"We're open {location.hours}.", "slots": slots}
 
-        if any(w in lowered for w in ADDRESS_WORDS):
+        if _matches(lowered, ADDRESS_WORDS):
             return {"intent": "question", "reply": f"We're at {location.address}.", "slots": slots}
 
-        if any(w in lowered for w in CUISINE_WORDS):
+        if _matches(lowered, CUISINE_WORDS):
             return {"intent": "question", "reply": f"We serve {restaurant.cuisine} food.", "slots": slots}
 
-        if any(w in lowered for w in PRICE_WORDS):
+        if _matches(lowered, PRICE_WORDS):
             priced = [t for t in location.all_tables() if t.price_note]
             if slots.get("area"):
                 priced = [t for t in priced if t.area == slots["area"]]
@@ -47,7 +53,7 @@ def build_offline_understander(restaurant: Restaurant, location: Location) -> Un
                 reply = " ".join(f"{area}: {note}." for area, note in seen_notes)
             return {"intent": "question", "reply": reply, "slots": slots}
 
-        if slots or any(w in lowered for w in BOOKING_WORDS):
+        if slots or _matches(lowered, BOOKING_WORDS):
             if "party_size" not in merged:
                 reply = "How many people?"
             elif "date" not in merged:
