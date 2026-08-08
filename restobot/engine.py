@@ -7,6 +7,7 @@ from restobot.config import Location, Restaurant, Table
 
 FORWARD_MSG = "Forwarding to the manager"
 CANT_HELP_MSG = "Can't help with that here, sorry."
+TROUBLE_MSG = "Having trouble understanding that, can you try again?"
 EXTEND_MINUTES = 30
 
 MAX_HISTORY = 8
@@ -62,7 +63,12 @@ class Engine:
                 self._remember("assistant", reply)
                 return reply
 
-        result = self.understand(self.history[:-1], text, self.slots)
+        try:
+            result = self.understand(self.history[:-1], text, self.slots)
+        except Exception:
+            self._remember("assistant", TROUBLE_MSG)
+            return TROUBLE_MSG
+
         intent = result.get("intent")
         extracted = result.get("slots") or {}
 

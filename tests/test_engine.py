@@ -3,7 +3,7 @@ import os
 import pytest
 
 from restobot.config import load_restaurant
-from restobot.engine import Engine, FORWARD_MSG, CANT_HELP_MSG
+from restobot.engine import Engine, FORWARD_MSG, CANT_HELP_MSG, TROUBLE_MSG
 
 DEMO_PATH = os.path.join(os.path.dirname(__file__), "..", "config", "demo_restaurant.yaml")
 
@@ -117,3 +117,37 @@ def test_extend_flow_uses_deterministic_confirmation(restaurant, downtown):
     reply = engine.handle_message("can you extend Bob's table on the 10th")
 
     assert reply == "Extended, Bob's table now runs 120 minutes."
+
+
+def test_understand_failure_does_not_crash_or_corrupt_state(restaurant, downtown):
+    def broken_understand(history, text, known_slots):
+        raise RuntimeError("network blew up")
+
+    engine = Engine(restaurant, downtown, broken_understand)
+    engine.slots = {"party_size": 2}
+    engine.candidates = []
+
+    reply = engine.handle_message("table for 2 tomorrow")
+
+    assert reply == TROUBLE_MSG
+    assert engine.slots == {"party_size": 2}
+    assert engine.candidates == []
+    assert engine.history[-1] == f"assistant: {TROUBLE_MSG}"
+
+
+def test_engine_recovers_after_a_failed_call(restaurant, downtown):
+    calls = {"n": 0}
+
+    def flaky_understand(history, text, known_slots):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("timeout")
+        return {"intent": "question", "reply": "We're open noon to 11.", "slots": {}}
+
+    engine = Engine(restaurant, downtown, flaky_understand)
+
+    first = engine.handle_message("when are you open")
+    second = engine.handle_message("when are you open")
+
+    assert first == TROUBLE_MSG
+    assert second == "We're open noon to 11."
