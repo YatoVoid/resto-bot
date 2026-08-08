@@ -66,9 +66,13 @@ def _require(d: dict, key: str, ctx: str):
 
 
 def _build_table(raw: dict, ctx: str) -> Table:
+    table_id = str(_require(raw, "id", ctx))
+    capacity = int(_require(raw, "capacity", ctx))
+    if capacity <= 0:
+        raise ConfigError(f"table '{table_id}' in {ctx} has capacity {capacity}, must be positive")
     return Table(
-        id=str(_require(raw, "id", ctx)),
-        capacity=int(_require(raw, "capacity", ctx)),
+        id=table_id,
+        capacity=capacity,
         area=str(_require(raw, "area", ctx)),
         notes=str(raw.get("notes", "")),
         price_note=str(raw.get("price_note", "")),

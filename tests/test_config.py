@@ -119,6 +119,54 @@ locations:
         os.unlink(path)
 
 
+def test_zero_capacity_raises():
+    yaml_text = """
+name: Bad Capacity Place
+locations:
+  - name: Only
+    address: 1 Main St
+    hours: "9-5"
+    floors:
+      - name: Floor 1
+        tables:
+          - id: T1
+            capacity: 0
+            area: regular
+"""
+    with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as f:
+        f.write(yaml_text)
+        path = f.name
+    try:
+        with pytest.raises(ConfigError):
+            load_restaurant(path)
+    finally:
+        os.unlink(path)
+
+
+def test_negative_capacity_raises():
+    yaml_text = """
+name: Bad Capacity Place
+locations:
+  - name: Only
+    address: 1 Main St
+    hours: "9-5"
+    floors:
+      - name: Floor 1
+        tables:
+          - id: T1
+            capacity: -2
+            area: regular
+"""
+    with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as f:
+        f.write(yaml_text)
+        path = f.name
+    try:
+        with pytest.raises(ConfigError):
+            load_restaurant(path)
+    finally:
+        os.unlink(path)
+
+
 def test_empty_locations_raises():
     yaml_text = """
 name: No Locations

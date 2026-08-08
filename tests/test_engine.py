@@ -106,6 +106,49 @@ def test_full_booking_flow_produces_accurate_summary(restaurant, downtown):
     assert len(engine.booking.reservations) == 1
 
 
+def test_two_bookings_in_one_session_both_succeed(restaurant, downtown):
+    stub = StubUnderstander([
+        {"intent": "booking", "reply": "What date works?",
+         "slots": {"party_size": 2, "area": "window"}},
+        {"intent": "booking", "reply": "What time?", "slots": {"date": "2026-08-10"}},
+        {"intent": "booking", "reply": "Got it.", "slots": {"time": "19:00"}},
+        {"intent": "booking", "reply": "", "slots": {"name": "Alice"}},
+        {"intent": "booking", "reply": "What date works?",
+         "slots": {"party_size": 2, "area": "window"}},
+        {"intent": "booking", "reply": "What time?", "slots": {"date": "2026-08-11"}},
+        {"intent": "booking", "reply": "Got it.", "slots": {"time": "19:00"}},
+        {"intent": "booking", "reply": "", "slots": {"name": "Bob"}},
+    ])
+    engine = Engine(restaurant, downtown, stub)
+
+    r1 = engine.handle_message("table for 2 by the window")
+    r2 = engine.handle_message("august 10th")
+    r3 = engine.handle_message("7pm")
+    if "Open right now" in r3:
+        r3 = engine.handle_message("D-G1")
+    r4 = engine.handle_message("Alice")
+    assert r4.startswith("Booked.")
+    assert engine.slots == {}
+    assert engine.candidates == []
+
+    r5 = engine.handle_message("table for 2 by the window again")
+    r6 = engine.handle_message("august 11th")
+    r7 = engine.handle_message("7pm")
+    if "Open right now" in r7:
+        r7 = engine.handle_message("D-G1")
+    r8 = engine.handle_message("Bob")
+
+    assert r8.startswith("Booked.")
+    assert "2026-08-11 at 19:00" in r8
+    assert "under Bob" in r8
+    assert len(engine.booking.reservations) == 2
+
+    names = {r.name for r in engine.booking.reservations}
+    dates = {r.date for r in engine.booking.reservations}
+    assert names == {"Alice", "Bob"}
+    assert dates == {"2026-08-10", "2026-08-11"}
+
+
 def test_extend_flow_uses_deterministic_confirmation(restaurant, downtown):
     engine = Engine(restaurant, downtown, StubUnderstander([]))
     engine.booking.book("Downtown", "D-G3", "2026-08-10", "19:00", 4, "Bob", duration_minutes=90)
