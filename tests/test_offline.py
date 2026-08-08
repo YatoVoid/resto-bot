@@ -27,6 +27,19 @@ def test_booking_with_missing_party_size_asks_for_it():
     assert result["reply"] == "How many people?"
 
 
+def test_bare_number_answers_party_size_question():
+    understand, _, _ = _understander()
+    result = understand([], "4", {"date": "2026-08-10"})
+    assert result["intent"] == "booking"
+    assert result["slots"]["party_size"] == 4
+
+
+def test_bare_number_ignored_once_party_size_already_known():
+    understand, _, _ = _understander()
+    result = understand([], "4", {"party_size": 2, "date": "2026-08-10"})
+    assert "party_size" not in result["slots"]
+
+
 def test_hours_question_returns_real_hours():
     understand, _, loc = _understander()
     result = understand([], "what are your hours", {})

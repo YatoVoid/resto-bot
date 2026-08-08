@@ -71,6 +71,31 @@ def test_question_intent_passes_model_reply_through(restaurant, downtown):
     assert reply == "We're open Tue-Sun noon to 11."
 
 
+def test_area_with_no_matching_candidates_does_not_loop_forever(restaurant, downtown):
+    stub = StubUnderstander([
+        {"intent": "booking", "reply": "What date works?",
+         "slots": {"party_size": 4}},
+        {"intent": "booking", "reply": "What time?", "slots": {"date": "2026-08-10"}},
+        {"intent": "booking", "reply": "Got it.", "slots": {"time": "14:00"}},
+        {"intent": "booking", "reply": "", "slots": {"area": "window"}},
+    ])
+    engine = Engine(restaurant, downtown, stub)
+
+    engine.handle_message("table for 4")
+    engine.handle_message("august 10th")
+    r3 = engine.handle_message("2pm")
+    assert "Open right now" in r3
+
+    r4 = engine.handle_message("next to window")
+
+    assert "No window table fits" in r4
+    assert "table_id" not in engine.slots
+    assert "area" not in engine.slots
+
+    r5 = engine.handle_message("D-G3")
+    assert "What name" in r5
+
+
 def test_full_booking_flow_produces_accurate_summary(restaurant, downtown):
     stub = StubUnderstander([
         {"intent": "booking", "reply": "What date works?",

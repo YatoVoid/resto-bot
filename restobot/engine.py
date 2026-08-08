@@ -115,6 +115,12 @@ class Engine:
                     matches = [t for t in self.candidates if t.area == area]
                     if len(matches) == 1:
                         self.slots["table_id"] = matches[0].id
+                    elif not matches:
+                        self.slots.pop("area", None)
+                        return (
+                            f"No {area} table fits that party right now. "
+                            f"Open: {describe_open_tables(self.candidates)}. Which one?"
+                        )
                 if "table_id" not in self.slots:
                     return f"Open right now: {describe_open_tables(self.candidates)}. Which one?"
 

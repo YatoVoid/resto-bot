@@ -24,6 +24,10 @@ def build_offline_understander(restaurant: Restaurant, location: Location) -> Un
         lowered = text.lower()
         merged = {**known_slots, **slots}
 
+        if not slots and "party_size" not in merged and text.strip().isdigit():
+            slots = {"party_size": int(text.strip())}
+            merged = {**known_slots, **slots}
+
         if _matches(lowered, EXTEND_WORDS):
             if "name" not in merged:
                 reply = "Who's the reservation under?"
