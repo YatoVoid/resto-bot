@@ -27,6 +27,31 @@ def test_loads_demo_restaurant():
     assert len(private_tables) == 2
 
 
+def test_find_floor_by_ordinal_index():
+    r = load_restaurant(DEMO_PATH)
+    downtown = r.get_location("Downtown")
+    assert downtown.find_floor("2").name == "Upper floor"
+    assert downtown.find_floor("1").name == "Ground floor"
+
+
+def test_find_floor_by_keyword():
+    r = load_restaurant(DEMO_PATH)
+    downtown = r.get_location("Downtown")
+    assert downtown.find_floor("ground").name == "Ground floor"
+    assert downtown.find_floor("upstairs").name == "Upper floor"
+
+    riverside = r.get_location("Riverside")
+    assert riverside.find_floor("main").name == "Main hall"
+    assert riverside.find_floor("terrace").name == "Terrace"
+
+
+def test_find_floor_out_of_range_returns_none():
+    r = load_restaurant(DEMO_PATH)
+    downtown = r.get_location("Downtown")
+    assert downtown.find_floor("9") is None
+    assert downtown.find_floor("nonsense") is None
+
+
 def test_price_note_parsed_when_present():
     r = load_restaurant(DEMO_PATH)
     downtown = r.get_location("Downtown")

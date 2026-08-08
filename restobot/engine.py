@@ -90,6 +90,20 @@ class Engine:
         self._remember("assistant", reply)
         return reply
 
+    def _narrow_candidates(self) -> list[Table]:
+        candidates = self.candidates
+        area = self.slots.get("area")
+        if area:
+            candidates = [t for t in candidates if t.area == area]
+
+        floor_hint = self.slots.get("floor_hint")
+        if floor_hint:
+            floor = self.location.find_floor(floor_hint)
+            if floor:
+                candidates = [t for t in candidates if t in floor.tables]
+
+        return candidates
+
     def _continue_booking(self, fallback_reply: str = "") -> str:
         missing = [k for k in ("party_size", "date", "time") if k not in self.slots]
         if missing:
@@ -99,31 +113,25 @@ class Engine:
             if not self.candidates:
                 self.candidates = self.booking.find_open_tables(
                     self.location.name, self.slots["date"], self.slots["time"],
-                    self.slots["party_size"], area=self.slots.get("area"),
+                    self.slots["party_size"],
                 )
                 if not self.candidates:
-                    area = self.slots.pop("area", None)
-                    if area:
-                        return f"No {area} tables free then, want to try a different area?"
                     self.slots.pop("time", None)
                     return "Nothing free at that time, want to try a different time?"
 
-            if len(self.candidates) == 1:
-                self.slots["table_id"] = self.candidates[0].id
-            else:
-                area = self.slots.get("area")
-                if area:
-                    matches = [t for t in self.candidates if t.area == area]
-                    if len(matches) == 1:
-                        self.slots["table_id"] = matches[0].id
-                    elif not matches:
-                        self.slots.pop("area", None)
-                        return (
-                            f"No {area} table fits that party right now. "
-                            f"Open: {describe_open_tables(self.candidates)}. Which one?"
-                        )
-                if "table_id" not in self.slots:
-                    return f"Open right now: {describe_open_tables(self.candidates)}. Which one?"
+            narrowed = self._narrow_candidates()
+            if len(narrowed) == 1:
+                self.slots["table_id"] = narrowed[0].id
+            elif not narrowed:
+                self.slots.pop("area", None)
+                self.slots.pop("floor_hint", None)
+                return (
+                    "Nothing matches that preference right now. "
+                    f"Open: {describe_open_tables(self.candidates)}. Which one?"
+                )
+
+            if "table_id" not in self.slots:
+                return f"Open right now: {describe_open_tables(narrowed)}. Which one?"
 
         if "name" not in self.slots:
             return "What name should I put it under?"

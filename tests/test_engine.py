@@ -88,12 +88,47 @@ def test_area_with_no_matching_candidates_does_not_loop_forever(restaurant, down
 
     r4 = engine.handle_message("next to window")
 
-    assert "No window table fits" in r4
+    assert "Nothing matches that preference" in r4
     assert "table_id" not in engine.slots
     assert "area" not in engine.slots
 
     r5 = engine.handle_message("D-G3")
     assert "What name" in r5
+
+
+def test_floor_and_area_narrow_candidates_together(restaurant, downtown):
+    stub = StubUnderstander([
+        {"intent": "booking", "reply": "What date works?",
+         "slots": {"party_size": 2, "floor_hint": "2"}},
+        {"intent": "booking", "reply": "What time?", "slots": {"date": "2026-08-10"}},
+        {"intent": "booking", "reply": "", "slots": {"time": "19:00"}},
+        {"intent": "booking", "reply": "", "slots": {"area": "window"}},
+    ])
+    engine = Engine(restaurant, downtown, stub)
+
+    engine.handle_message("a spot on the second floor for 2")
+    engine.handle_message("august 10th")
+    r3 = engine.handle_message("7pm")
+    assert "D-U1" in r3 and "D-U2" in r3 and "D-U3" in r3
+    assert "D-G1" not in r3
+
+    r4 = engine.handle_message("next to window")
+    assert engine.slots["table_id"] == "D-U3"
+    assert "What name" in r4
+
+
+def test_mid_booking_gibberish_re_asks_current_missing_field(restaurant, downtown):
+    engine = Engine(restaurant, downtown, StubUnderstander([
+        {"intent": "booking", "reply": "How many people?", "slots": {}},
+    ]))
+    r1 = engine.handle_message("i want to book")
+    assert r1 == "How many people?"
+
+    engine.understand = StubUnderstander([
+        {"intent": "booking", "reply": "What date?", "slots": {"party_size": 2}},
+    ])
+    r2 = engine.handle_message("2")
+    assert r2 == "What date?"
 
 
 def test_table_id_matches_without_dash_or_case(restaurant, downtown):

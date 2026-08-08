@@ -71,7 +71,10 @@ def build_offline_understander(restaurant: Restaurant, location: Location) -> Un
                 reply = " ".join(f"{area}: {note}." for area, note in seen_notes)
             return {"intent": "question", "reply": reply, "slots": slots}
 
-        if slots or _matches(lowered, BOOKING_WORDS):
+        mid_booking = any(
+            k in merged for k in ("party_size", "date", "time", "table_id", "name")
+        )
+        if slots or _matches(lowered, BOOKING_WORDS) or mid_booking:
             if "party_size" not in merged:
                 reply = "How many people?"
             elif "date" not in merged:

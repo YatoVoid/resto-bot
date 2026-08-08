@@ -41,6 +41,26 @@ class Location:
                     return f.name
         raise KeyError(table_id)
 
+    def find_floor(self, hint: str) -> Floor | None:
+        hint = hint.lower()
+        if hint.isdigit():
+            idx = int(hint) - 1
+            if 0 <= idx < len(self.floors):
+                return self.floors[idx]
+            return None
+
+        keyword_groups = {
+            "ground": ("ground",), "bottom": ("ground",), "downstairs": ("ground",),
+            "upper": ("upper",), "top": ("upper",), "upstairs": ("upper",),
+            "roof": ("upper",), "rooftop": ("upper",),
+            "main": ("main",), "terrace": ("terrace",),
+        }
+        for keyword in keyword_groups.get(hint, (hint,)):
+            for f in self.floors:
+                if keyword in f.name.lower():
+                    return f
+        return None
+
 
 @dataclass(frozen=True)
 class Restaurant:

@@ -74,6 +74,11 @@ def run(config_path: str) -> None:
     understand_fn, live = build_understander(restaurant, location)
     if not live:
         print("(no ANTHROPIC_API_KEY set, running in offline mode)")
+        print("What would you like to do?")
+        print("  1) Book a table")
+        print("  2) Ask about hours, address, menu, or prices")
+        print("  3) Extend an existing reservation")
+        print("Just tell me in your own words, or say quit to leave.")
 
     engine = Engine(restaurant, location, understand_fn)
     log_lines: list[str] = []

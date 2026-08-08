@@ -119,3 +119,11 @@ def test_gibberish_returns_irrelevant():
     understand, _, _ = _understander()
     result = understand([], "do you think the stock market will crash", {})
     assert result["intent"] == "irrelevant"
+
+
+def test_unparseable_reply_mid_booking_re_asks_instead_of_declining():
+    understand, _, _ = _understander()
+    known = {"party_size": 2}
+    result = understand([], "bro idk what to say", known)
+    assert result["intent"] == "booking"
+    assert result["reply"] == "What date?"
