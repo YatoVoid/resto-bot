@@ -116,3 +116,149 @@ def test_long_message_extracts_floor_and_area_together():
     slots = extract_slots("i want a spot on second floor next to window")
     assert slots["floor_hint"] == "2"
     assert slots["area"] == "window"
+
+
+def test_party_size_as_written_word():
+    slots = extract_slots("table for two please")
+    assert slots["party_size"] == 2
+
+
+def test_we_are_word_number():
+    slots = extract_slots("we are four")
+    assert slots["party_size"] == 4
+
+
+def test_party_of_word_number():
+    slots = extract_slots("party of six")
+    assert slots["party_size"] == 6
+
+
+def test_table_for_word_number_and_people():
+    slots = extract_slots("a table for eight people")
+    assert slots["party_size"] == 8
+
+
+def test_just_the_word_number_of_us():
+    slots = extract_slots("just the two of us")
+    assert slots["party_size"] == 2
+
+
+def test_ppl_abbreviation():
+    slots = extract_slots("2 ppl")
+    assert slots["party_size"] == 2
+
+
+def test_tmrw_shorthand_resolves_to_tomorrow():
+    slots = extract_slots("tmrw", reference_date=REF)
+    assert slots["date"] == "2026-08-09"
+
+
+def test_2moro_shorthand_resolves_to_tomorrow():
+    slots = extract_slots("2moro", reference_date=REF)
+    assert slots["date"] == "2026-08-09"
+
+
+def test_2day_shorthand_resolves_to_today():
+    slots = extract_slots("free 2day?", reference_date=REF)
+    assert slots["date"] == "2026-08-08"
+
+
+def test_half_past_resolves_with_pm_assumption():
+    slots = extract_slots("half past seven")
+    assert slots["time"] == "19:30"
+
+
+def test_quarter_to_resolves_with_pm_assumption():
+    slots = extract_slots("quarter to eight")
+    assert slots["time"] == "19:45"
+
+
+def test_quarter_past_resolves_with_pm_assumption():
+    slots = extract_slots("quarter past six")
+    assert slots["time"] == "18:15"
+
+
+def test_oclock_with_apostrophe():
+    slots = extract_slots("8 o'clock")
+    assert slots["time"] == "20:00"
+
+
+def test_oclock_no_space_no_apostrophe():
+    slots = extract_slots("8oclock")
+    assert slots["time"] == "20:00"
+
+
+def test_ish_time_resolves():
+    slots = extract_slots("around 7ish")
+    assert slots["time"] == "19:00"
+
+
+def test_around_bare_hour_resolves():
+    slots = extract_slots("can we come around 7")
+    assert slots["time"] == "19:00"
+
+
+def test_around_with_explicit_pm_is_not_double_shifted():
+    slots = extract_slots("around 7pm")
+    assert slots["time"] == "19:00"
+
+
+def test_in_n_days_resolves():
+    slots = extract_slots("in 3 days", reference_date=REF)
+    assert slots["date"] == "2026-08-11"
+
+
+def test_in_a_week_resolves():
+    slots = extract_slots("in a week", reference_date=REF)
+    assert slots["date"] == "2026-08-15"
+
+
+def test_in_n_weeks_resolves():
+    slots = extract_slots("in 2 weeks", reference_date=REF)
+    assert slots["date"] == "2026-08-22"
+
+
+def test_day_only_this_month_resolves():
+    slots = extract_slots("on the 15th", reference_date=REF)
+    assert slots["date"] == "2026-08-15"
+
+
+def test_day_only_already_passed_rolls_to_next_month():
+    slots = extract_slots("on the 1st", reference_date=REF)
+    assert slots["date"] == "2026-09-01"
+
+
+def test_negated_area_is_not_extracted():
+    slots = extract_slots("actually not window, something else")
+    assert "area" not in slots
+
+
+def test_anything_but_area_is_not_extracted():
+    slots = extract_slots("anything but window is fine")
+    assert "area" not in slots
+
+
+def test_long_rambling_message_extracts_everything():
+    text = (
+        "hey so basically me and my wife want to come by maybe tomorrow "
+        "evening around 7 or so, table for two, somewhere quiet would be "
+        "nice if possible thanks"
+    )
+    slots = extract_slots(text, reference_date=REF)
+    assert slots["date"] == "2026-08-09"
+    assert slots["time"] == "19:00"
+    assert slots["party_size"] == 2
+
+
+def test_long_formal_message_extracts_everything():
+    text = (
+        "good afternoon, I was wondering if it would be possible to "
+        "reserve a table for four people this coming friday at around "
+        "half past seven in the evening, preferably somewhere near a "
+        "window if available"
+    )
+    slots = extract_slots(text, reference_date=REF)
+    assert slots["date"] == "2026-08-14"
+    assert slots["time"] == "19:30"
+    assert slots["party_size"] == 4
+    assert slots["area"] == "window"

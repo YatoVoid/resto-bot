@@ -12,6 +12,15 @@ MONTHS = {
     "october": 10, "nov": 11, "november": 11, "dec": 12, "december": 12,
 }
 
+NUMBER_WORDS = {
+    "one": "1", "two": "2", "three": "3", "four": "4", "five": "5",
+    "six": "6", "seven": "7", "eight": "8", "nine": "9", "ten": "10",
+    "eleven": "11", "twelve": "12", "thirteen": "13", "fourteen": "14",
+    "fifteen": "15", "sixteen": "16", "seventeen": "17", "eighteen": "18",
+    "nineteen": "19", "twenty": "20", "couple": "2",
+}
+NUMBER_WORDS_RE = re.compile(r"\b(" + "|".join(NUMBER_WORDS.keys()) + r")\b", re.IGNORECASE)
+
 AREA_SYNONYMS = {
     "window": "window",
     "private": "private",
@@ -31,6 +40,8 @@ AREA_SYNONYMS = {
     "middle": "regular",
     "corner": "regular",
 }
+
+NEGATION_RE = re.compile(r"\b(?:not|no|n't want|anything but|except|besides)\b", re.IGNORECASE)
 
 FLOOR_ORDINALS = {
     "first": "1", "1st": "1",
@@ -66,12 +77,20 @@ NAME_STOPWORDS = {
 PARTY_PATTERNS = [
     re.compile(r"table for (\d+)", re.IGNORECASE),
     re.compile(r"party of (\d+)", re.IGNORECASE),
-    re.compile(r"(\d+)\s*(?:people|persons|of us|guests)", re.IGNORECASE),
+    re.compile(r"we are (\d+)", re.IGNORECASE),
+    re.compile(r"(\d+)\s*(?:people|persons|of us|guests|ppl)", re.IGNORECASE),
     re.compile(r"for (\d+)\b", re.IGNORECASE),
 ]
 
 TIME_12H = re.compile(r"\b(\d{1,2})(?::(\d{2}))?\s*([ap]\.?m\.?)\b", re.IGNORECASE)
 TIME_24H = re.compile(r"\b([01]?\d|2[0-3]):([0-5]\d)\b")
+
+HALF_PAST_RE = re.compile(r"\bhalf past (\d{1,2})\b", re.IGNORECASE)
+QUARTER_PAST_RE = re.compile(r"\bquarter past (\d{1,2})\b", re.IGNORECASE)
+QUARTER_TO_RE = re.compile(r"\bquarter to (\d{1,2})\b", re.IGNORECASE)
+OCLOCK_RE = re.compile(r"\b(\d{1,2})\s*o'?clock\b", re.IGNORECASE)
+ISH_RE = re.compile(r"\b(\d{1,2})\s*ish\b", re.IGNORECASE)
+AROUND_RE = re.compile(r"\baround\s+(\d{1,2})\b(?!\s*(?::|am|pm))", re.IGNORECASE)
 
 TIME_WORDS = {
     "noon": "12:00",
@@ -95,6 +114,23 @@ DATE_DAY_MONTH = re.compile(
     r"(jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|"
     r"aug|august|sep|sept|september|oct|october|nov|november|dec|december)\b", re.IGNORECASE
 )
+DATE_DAY_ONLY = re.compile(r"\bthe (\d{1,2})(?:st|nd|rd|th)\b", re.IGNORECASE)
+IN_DAYS_RE = re.compile(r"\bin (\d{1,2}) days?\b", re.IGNORECASE)
+IN_WEEK_RE = re.compile(r"\bin (?:a|one) week\b", re.IGNORECASE)
+IN_WEEKS_RE = re.compile(r"\bin (\d{1,2}) weeks?\b", re.IGNORECASE)
+
+TOMORROW_WORDS = ("tomorrow", "tmrw", "tmr", "2moro", "2mrw")
+TODAY_WORDS = ("today", "2day", "tonight")
+
+
+def _words_to_digits(text: str) -> str:
+    return NUMBER_WORDS_RE.sub(lambda m: NUMBER_WORDS[m.group(0).lower()], text)
+
+
+def _pm_hour(hour: int) -> int:
+    if 1 <= hour <= 11:
+        return hour + 12
+    return hour
 
 
 def _next_weekday(ref: date, weekday_index: int) -> date:
@@ -112,9 +148,19 @@ def _extract_date(text: str, ref: date) -> str | None:
 
     if "day after tomorrow" in lowered or "after tomorrow" in lowered:
         return (ref + timedelta(days=2)).isoformat()
-    if "today" in lowered or "tonight" in lowered:
+
+    m = IN_DAYS_RE.search(lowered)
+    if m:
+        return (ref + timedelta(days=int(m.group(1)))).isoformat()
+    if IN_WEEK_RE.search(lowered):
+        return (ref + timedelta(days=7)).isoformat()
+    m = IN_WEEKS_RE.search(lowered)
+    if m:
+        return (ref + timedelta(weeks=int(m.group(1)))).isoformat()
+
+    if any(re.search(rf"\b{w}\b", lowered) for w in TODAY_WORDS):
         return ref.isoformat()
-    if "tomorrow" in lowered:
+    if any(re.search(rf"\b{w}\b", lowered) for w in TOMORROW_WORDS):
         return (ref + timedelta(days=1)).isoformat()
 
     for i, day_name in enumerate(WEEKDAYS):
@@ -158,6 +204,25 @@ def _extract_date(text: str, ref: date) -> str | None:
         except ValueError:
             return None
 
+    m = DATE_DAY_ONLY.search(lowered)
+    if m:
+        day = int(m.group(1))
+        year, month = ref.year, ref.month
+        try:
+            candidate = date(year, month, day)
+        except ValueError:
+            return None
+        if candidate < ref:
+            month += 1
+            if month > 12:
+                month = 1
+                year += 1
+            try:
+                candidate = date(year, month, day)
+            except ValueError:
+                return None
+        return candidate.isoformat()
+
     return None
 
 
@@ -177,6 +242,34 @@ def _extract_time(text: str) -> str | None:
     if m:
         return f"{int(m.group(1)):02d}:{m.group(2)}"
 
+    converted = _words_to_digits(text)
+
+    m = HALF_PAST_RE.search(converted)
+    if m:
+        return f"{_pm_hour(int(m.group(1))):02d}:30"
+
+    m = QUARTER_PAST_RE.search(converted)
+    if m:
+        return f"{_pm_hour(int(m.group(1))):02d}:15"
+
+    m = QUARTER_TO_RE.search(converted)
+    if m:
+        base = _pm_hour(int(m.group(1)))
+        hour = base - 1 if base > 0 else 23
+        return f"{hour:02d}:45"
+
+    m = OCLOCK_RE.search(converted)
+    if m:
+        return f"{_pm_hour(int(m.group(1))):02d}:00"
+
+    m = ISH_RE.search(converted)
+    if m:
+        return f"{_pm_hour(int(m.group(1))):02d}:00"
+
+    m = AROUND_RE.search(converted)
+    if m:
+        return f"{_pm_hour(int(m.group(1))):02d}:00"
+
     lowered = text.lower()
     for word, hhmm in TIME_WORDS.items():
         if re.search(rf"\b{word}\b", lowered):
@@ -186,18 +279,28 @@ def _extract_time(text: str) -> str | None:
 
 
 def _extract_party_size(text: str) -> int | None:
+    converted = _words_to_digits(text)
     for pattern in PARTY_PATTERNS:
-        m = pattern.search(text)
+        m = pattern.search(converted)
         if m:
             return int(m.group(1))
     return None
 
 
+def extract_party_size(text: str) -> int | None:
+    return _extract_party_size(text)
+
+
 def _extract_area(text: str) -> str | None:
     lowered = text.lower()
     for word, area in AREA_SYNONYMS.items():
-        if re.search(rf"\b{word}\b", lowered):
-            return area
+        m = re.search(rf"\b{word}\b", lowered)
+        if not m:
+            continue
+        before = lowered[max(0, m.start() - 20):m.start()]
+        if NEGATION_RE.search(before):
+            continue
+        return area
     return None
 
 

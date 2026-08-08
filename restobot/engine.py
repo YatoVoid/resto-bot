@@ -5,11 +5,26 @@ from typing import Callable
 
 from restobot.availability import Booking, BookingError
 from restobot.config import Location, Restaurant, Table
+from restobot.nlu_stub import extract_party_size
 
 FORWARD_MSG = "Forwarding to the manager"
 CANT_HELP_MSG = "Can't help with that here, sorry."
 TROUBLE_MSG = "Having trouble understanding that, can you try again?"
 EXTEND_MINUTES = 30
+
+# whole-word triggers, matched with a boundary on both sides
+MANAGER_FALLBACK_EXACT = (
+    "can't make it", "cant make it", "parking", "wifi", "wi-fi",
+    "dress code", "wheelchair", "accessible", "discount", "private event",
+    "high chair", "kids menu", "child menu", "gluten", "vegan", "vegetarian",
+    "pet", "dog", "allergic", "allergy",
+)
+
+# word stems, matched with a boundary only on the left so complaining,
+# complaint, reschedule, rescheduling, cancellation all still hit
+MANAGER_FALLBACK_PREFIXES = ("complain", "reschedul", "cancel")
+
+PARTY_THRESHOLD_RE = re.compile(r"party of (\d+) or more", re.IGNORECASE)
 
 MAX_HISTORY = 8
 
@@ -40,7 +55,23 @@ class Engine:
 
     def _is_manager_topic(self, text: str) -> bool:
         lowered = text.lower()
-        return any(trigger.lower() in lowered for trigger in self.restaurant.manager_triggers)
+        triggers = [t.lower() for t in self.restaurant.manager_triggers]
+        if any(trigger in lowered for trigger in triggers):
+            return True
+        if any(re.search(rf"\b{topic}\b", lowered) for topic in MANAGER_FALLBACK_EXACT):
+            return True
+        if any(re.search(rf"\b{prefix}", lowered) for prefix in MANAGER_FALLBACK_PREFIXES):
+            return True
+
+        for trigger in triggers:
+            m = PARTY_THRESHOLD_RE.search(trigger)
+            if not m:
+                continue
+            party = extract_party_size(text)
+            if party is not None and party >= int(m.group(1)):
+                return True
+
+        return False
 
     def _match_table_id(self, text: str) -> Table | None:
         normalized = re.sub(r"[^A-Z0-9]", "", text.upper())
