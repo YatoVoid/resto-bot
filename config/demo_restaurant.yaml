@@ -1,0 +1,76 @@
+name: Nonna Rosa
+cuisine: Italian
+manager_triggers:
+  - catering
+  - complaint
+  - allergy
+  - refund
+  - party of 10 or more
+
+locations:
+  - name: Downtown
+    address: 14 Baker Street
+    hours: "Tue-Sun 12:00-23:00, closed Monday"
+    busy_hours: "Fri-Sat 19:00-21:30 is our busiest window"
+    floors:
+      - name: Ground floor
+        tables:
+          - id: D-G1
+            capacity: 2
+            area: window
+          - id: D-G2
+            capacity: 2
+            area: window
+          - id: D-G3
+            capacity: 4
+            area: regular
+          - id: D-G4
+            capacity: 4
+            area: regular
+          - id: D-G5
+            capacity: 6
+            area: regular
+      - name: Upper floor
+        tables:
+          - id: D-U1
+            capacity: 4
+            area: private
+            notes: closed cabinet, seats up to 4
+          - id: D-U2
+            capacity: 8
+            area: private
+            notes: closed cabinet, good for groups
+          - id: D-U3
+            capacity: 2
+            area: window
+
+  - name: Riverside
+    address: 92 Mill Lane
+    hours: "Mon-Sun 11:30-22:00"
+    busy_hours: "Sunday brunch 11:30-14:00 fills up fast"
+    floors:
+      - name: Main hall
+        tables:
+          - id: R-M1
+            capacity: 2
+            area: window
+          - id: R-M2
+            capacity: 4
+            area: window
+          - id: R-M3
+            capacity: 4
+            area: regular
+          - id: R-M4
+            capacity: 6
+            area: regular
+      - name: Terrace
+        tables:
+          - id: R-T1
+            capacity: 4
+            area: patio
+          - id: R-T2
+            capacity: 4
+            area: patio
+          - id: R-T3
+            capacity: 6
+            area: patio
