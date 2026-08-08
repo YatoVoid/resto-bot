@@ -9,6 +9,7 @@ EXTEND_WORDS = ("extend", "longer", "more time", "push back")
 HOURS_WORDS = ("hour", "open", "close", "when do you")
 ADDRESS_WORDS = ("address", "where are you", "located")
 CUISINE_WORDS = ("cuisine", "what food", "kind of food", "menu")
+PRICE_WORDS = ("price", "cost", "how much", "minimum spend", "fee")
 
 
 def build_offline_understander(restaurant: Restaurant, location: Location) -> UnderstandFn:
@@ -34,6 +35,17 @@ def build_offline_understander(restaurant: Restaurant, location: Location) -> Un
 
         if any(w in lowered for w in CUISINE_WORDS):
             return {"intent": "question", "reply": f"We serve {restaurant.cuisine} food.", "slots": slots}
+
+        if any(w in lowered for w in PRICE_WORDS):
+            priced = [t for t in location.all_tables() if t.price_note]
+            if slots.get("area"):
+                priced = [t for t in priced if t.area == slots["area"]]
+            if not priced:
+                reply = "No special pricing, standard menu prices apply."
+            else:
+                seen_notes = dict.fromkeys((t.area, t.price_note) for t in priced)
+                reply = " ".join(f"{area}: {note}." for area, note in seen_notes)
+            return {"intent": "question", "reply": reply, "slots": slots}
 
         if slots or any(w in lowered for w in BOOKING_WORDS):
             if "party_size" not in merged:

@@ -44,6 +44,13 @@ TOOL_SCHEMA = {
 }
 
 
+def _price_lines(location: Location) -> str:
+    priced = [t for t in location.all_tables() if t.price_note]
+    if not priced:
+        return "No special pricing, standard menu prices apply everywhere."
+    return "\n".join(f"- {t.area} ({t.id}): {t.price_note}" for t in priced)
+
+
 def build_system_prompt(restaurant: Restaurant, location: Location) -> str:
     triggers = ", ".join(restaurant.manager_triggers) or "none listed"
     return (
@@ -52,10 +59,12 @@ def build_system_prompt(restaurant: Restaurant, location: Location) -> str:
         f"location at {location.address}. Hours: {location.hours}. "
         f"Busy times: {location.busy_hours or 'not specified'}.\n\n"
         f"Topics that need a person, not you: {triggers}.\n\n"
+        f"Pricing by table:\n{_price_lines(location)}\n\n"
         "Reply like a real staff member texting back, short and warm, one or two "
         "sentences, no filler, no corporate tone. Ask for one missing detail at a time "
         "when booking. Never invent a table number, a price, or an availability answer, "
-        "the app checks real availability separately, you only handle language."
+        "the app checks real availability separately, you only handle language. Only "
+        "state a price using the pricing list above, word for word if possible."
     )
 
 

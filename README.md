@@ -109,6 +109,10 @@ locations:
 - A single `locations` entry means no location question ever gets
   asked. Two or more, and the assistant asks once up front and
   remembers the answer for the rest of the session.
+- `price_note` on a table is a free-text string like "$10pp minimum
+  spend" or "$150 room fee". Leave it off a table for no special
+  pricing. Both the real model and the offline fallback answer price
+  questions straight from this field, nothing gets invented.
 
 The reply tone and the rules the model follows live in
 `restobot/llm.py`, in `build_system_prompt`. Edit that text directly to

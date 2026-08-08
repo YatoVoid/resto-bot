@@ -44,6 +44,8 @@ def test_build_system_prompt_includes_facts():
     assert location.address in prompt
     for trigger in r.manager_triggers:
         assert trigger in prompt
+    priced_table = next(t for t in location.all_tables() if t.price_note)
+    assert priced_table.price_note in prompt
 
 
 def test_tool_schema_shape():

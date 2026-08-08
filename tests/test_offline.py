@@ -41,6 +41,14 @@ def test_address_question_returns_real_address():
     assert loc.address in result["reply"]
 
 
+def test_price_question_returns_real_price_note():
+    understand, _, loc = _understander()
+    result = understand([], "how much for a window table", {})
+    assert result["intent"] == "question"
+    priced = next(t for t in loc.all_tables() if t.price_note)
+    assert priced.price_note in result["reply"]
+
+
 def test_extend_text_returns_extend_intent():
     understand, _, _ = _understander()
     result = understand([], "can we extend our table, longer please", {})
