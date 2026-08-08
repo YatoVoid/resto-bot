@@ -26,6 +26,20 @@ def test_loads_demo_restaurant():
     assert len(private_tables) == 2
 
 
+def test_price_note_parsed_when_present():
+    r = load_restaurant(DEMO_PATH)
+    downtown = r.get_location("Downtown")
+    cabinet = next(t for t in downtown.all_tables() if t.id == "D-U1")
+    assert cabinet.price_note == "$150 room fee, waived over $400 spend"
+
+
+def test_price_note_defaults_to_empty_string():
+    r = load_restaurant(DEMO_PATH)
+    downtown = r.get_location("Downtown")
+    regular = next(t for t in downtown.all_tables() if t.id == "D-G3")
+    assert regular.price_note == ""
+
+
 def test_single_location_restaurant():
     yaml_text = """
 name: Small Place

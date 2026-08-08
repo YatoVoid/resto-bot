@@ -14,6 +14,7 @@ class Table:
     capacity: int
     area: str
     notes: str = ""
+    price_note: str = ""
 
 
 @dataclass(frozen=True)
@@ -70,6 +71,7 @@ def _build_table(raw: dict, ctx: str) -> Table:
         capacity=int(_require(raw, "capacity", ctx)),
         area=str(_require(raw, "area", ctx)),
         notes=str(raw.get("notes", "")),
+        price_note=str(raw.get("price_note", "")),
     )
 
 

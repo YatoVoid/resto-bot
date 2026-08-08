@@ -18,9 +18,11 @@ locations:
           - id: D-G1
             capacity: 2
             area: window
+            price_note: "$10pp minimum spend"
           - id: D-G2
             capacity: 2
             area: window
+            price_note: "$10pp minimum spend"
           - id: D-G3
             capacity: 4
             area: regular
@@ -36,13 +38,16 @@ locations:
             capacity: 4
             area: private
             notes: closed cabinet, seats up to 4
+            price_note: "$150 room fee, waived over $400 spend"
           - id: D-U2
             capacity: 8
             area: private
             notes: closed cabinet, good for groups
+            price_note: "$250 room fee, waived over $600 spend"
           - id: D-U3
             capacity: 2
             area: window
+            price_note: "$10pp minimum spend"
 
   - name: Riverside
     address: 92 Mill Lane
@@ -54,9 +59,11 @@ locations:
           - id: R-M1
             capacity: 2
             area: window
+            price_note: "no minimum, river view"
           - id: R-M2
             capacity: 4
             area: window
+            price_note: "no minimum, river view"
           - id: R-M3
             capacity: 4
             area: regular
@@ -68,9 +75,12 @@ locations:
           - id: R-T1
             capacity: 4
             area: patio
+            price_note: "$15pp minimum spend, heated in winter"
           - id: R-T2
             capacity: 4
             area: patio
+            price_note: "$15pp minimum spend, heated in winter"
           - id: R-T3
             capacity: 6
             area: patio
+            price_note: "$15pp minimum spend, heated in winter"
