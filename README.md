@@ -18,7 +18,7 @@ you don't, so you can try the flow without spending anything.
 ```bash
 sudo apt update
 sudo apt install -y python3 python3-venv python3-pip
-git clone <this-repo-url> resto-bot
+git clone https://github.com/YatoVoid/resto-bot.git
 cd resto-bot
 python3 -m venv .venv
 source .venv/bin/activate
@@ -29,7 +29,7 @@ pip install -r requirements.txt
 
 ```bash
 sudo pacman -S --needed python python-pip
-git clone <this-repo-url> resto-bot
+git clone https://github.com/YatoVoid/resto-bot.git
 cd resto-bot
 python -m venv .venv
 source .venv/bin/activate
