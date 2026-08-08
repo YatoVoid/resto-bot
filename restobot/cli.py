@@ -5,7 +5,9 @@ import os
 import sys
 from datetime import datetime
 
-from restobot.config import Restaurant, Location, load_restaurant
+import yaml
+
+from restobot.config import ConfigError, Restaurant, Location, load_restaurant
 from restobot.engine import Engine, UnderstandFn
 from restobot.offline import build_offline_understander
 
@@ -57,7 +59,15 @@ def save_session_log(restaurant: Restaurant, lines: list[str]) -> str:
 
 
 def run(config_path: str) -> None:
-    restaurant = load_restaurant(config_path)
+    try:
+        restaurant = load_restaurant(config_path)
+    except FileNotFoundError:
+        print(f"Can't find a config file at {config_path}")
+        sys.exit(1)
+    except (ConfigError, yaml.YAMLError) as e:
+        print(f"That config file has a problem: {e}")
+        sys.exit(1)
+
     print(f"{restaurant.name}, how can I help?")
 
     location = pick_location(restaurant)
