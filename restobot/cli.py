@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
+from datetime import datetime
 
-from restobot.availability import Booking, BookingError
-from restobot.config import Restaurant, Location, Table, load_restaurant
-from restobot.nlu_stub import extract_slots
+from restobot.config import Restaurant, Location, load_restaurant
+from restobot.engine import Engine, UnderstandFn
+from restobot.offline import build_offline_understander
 
 DEFAULT_CONFIG = "config/demo_restaurant.yaml"
+LOG_DIR = "logs"
 
 
 def pick_location(restaurant: Restaurant) -> Location:
@@ -26,44 +29,31 @@ def pick_location(restaurant: Restaurant) -> Location:
         print(f"Didn't catch that. Pick one of: {names}")
 
 
-def describe_open_tables(tables: list[Table]) -> str:
-    by_area: dict[str, list[Table]] = {}
-    for t in tables:
-        by_area.setdefault(t.area, []).append(t)
+def build_understander(restaurant: Restaurant, location: Location) -> tuple[UnderstandFn, bool]:
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if api_key:
+        from restobot import llm
 
-    parts = []
-    for area, area_tables in by_area.items():
-        ids = ", ".join(t.id for t in area_tables)
-        parts.append(f"{area}: {ids}")
-    return " | ".join(parts)
+        client = llm.build_client()
+        system_prompt = llm.build_system_prompt(restaurant, location)
 
+        def understand(history, text, known_slots):
+            return llm.classify_turn(client, system_prompt, history, text, known_slots)
 
-def missing_slot_question(slots: dict) -> str | None:
-    if "party_size" not in slots:
-        return "How many people?"
-    if "date" not in slots:
-        return "What date?"
-    if "time" not in slots:
-        return "What time?"
-    return None
+        return understand, True
+
+    return build_offline_understander(restaurant, location), False
 
 
-def find_table_choice(text: str, candidates: list[Table]) -> Table | None:
-    upper = text.upper()
-    for t in candidates:
-        if t.id.upper() in upper:
-            return t
-    area = None
-    lowered = text.lower()
-    for word in ("window", "private", "patio", "regular"):
-        if word in lowered:
-            area = word
-            break
-    if area:
-        matches = [t for t in candidates if t.area == area]
-        if len(matches) == 1:
-            return matches[0]
-    return None
+def save_session_log(restaurant: Restaurant, lines: list[str]) -> str:
+    os.makedirs(LOG_DIR, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    slug = restaurant.name.lower().replace(" ", "_")
+    path = os.path.join(LOG_DIR, f"{slug}-{ts}.log")
+    with open(path, "w", encoding="utf-8") as f:
+        for line in lines:
+            f.write(line + "\n")
+    return path
 
 
 def run(config_path: str) -> None:
@@ -71,10 +61,12 @@ def run(config_path: str) -> None:
     print(f"{restaurant.name}, how can I help?")
 
     location = pick_location(restaurant)
-    booking = Booking(restaurant)
+    understand_fn, live = build_understander(restaurant, location)
+    if not live:
+        print("(no ANTHROPIC_API_KEY set, running in offline mode)")
 
-    slots: dict = {}
-    candidates: list[Table] = []
+    engine = Engine(restaurant, location, understand_fn)
+    log_lines: list[str] = []
 
     while True:
         line = input("> ").strip()
@@ -83,94 +75,15 @@ def run(config_path: str) -> None:
         if not line:
             continue
 
-        if line.lower().startswith("extend"):
-            handle_extend(booking, location, line)
-            continue
+        reply = engine.handle_message(line)
+        print(reply)
+        log_lines.append(f"guest: {line}")
+        log_lines.append(f"assistant: {reply}")
 
-        slots.update(extract_slots(line))
-
-        question = missing_slot_question(slots)
-        if question:
-            print(question)
-            continue
-
-        if "table_id" not in slots:
-            if candidates:
-                chosen = find_table_choice(line, candidates)
-                if chosen:
-                    slots["table_id"] = chosen.id
-                else:
-                    print(f"Which one? {describe_open_tables(candidates)}")
-                    continue
-            else:
-                candidates = booking.find_open_tables(
-                    location.name, slots["date"], slots["time"],
-                    slots["party_size"], area=slots.get("area"),
-                )
-                if not candidates:
-                    area = slots.get("area")
-                    has_area_at_all = any(
-                        t.area == area and t.capacity >= slots["party_size"]
-                        for t in location.all_tables()
-                    ) if area else True
-                    if area and not has_area_at_all:
-                        print(f"We don't have a {area} table for that many people here, try a different area?")
-                        slots.pop("area", None)
-                    elif area:
-                        print(f"No {area} tables free then, try a different time or area?")
-                        slots.pop("time", None)
-                        slots.pop("area", None)
-                    else:
-                        print("Nothing free for that time, want to try a different time?")
-                        slots.pop("time", None)
-                    continue
-                if len(candidates) == 1:
-                    slots["table_id"] = candidates[0].id
-                else:
-                    print(f"Open right now: {describe_open_tables(candidates)}. Which one?")
-                    continue
-
-        if "name" not in slots:
-            print("What name should I put it under?")
-            continue
-
-        try:
-            reservation = booking.book(
-                location.name, slots["table_id"], slots["date"], slots["time"],
-                slots["party_size"], slots["name"],
-            )
-        except BookingError as e:
-            print(f"Couldn't book that: {e}")
-            slots.pop("table_id", None)
-            candidates = []
-            continue
-
-        area = next(t.area for t in location.all_tables() if t.id == reservation.table_id)
-        print(
-            f"Booked. {restaurant.name}, {location.address}. "
-            f"Table {reservation.table_id} ({area}), {reservation.date} at {reservation.time}, "
-            f"party of {reservation.party_size}, under {reservation.name}."
-        )
-        slots = {}
-        candidates = []
-
-
-def handle_extend(booking: Booking, location: Location, line: str) -> None:
-    extracted = extract_slots(line)
-    name = extracted.get("name")
-    if not name:
-        print("Extend for who? Say the name.")
-        return
-    date = extracted.get("date")
-    if not date:
-        print("What date was the reservation for?")
-        return
-    try:
-        updated = booking.extend(name, date, 30)
-    except BookingError as e:
-        print(f"Couldn't extend: {e}")
-        return
-    print(f"Extended {updated.name}'s table to {updated.duration_minutes} minutes.")
+    if log_lines:
+        path = save_session_log(restaurant, log_lines)
+        print(f"(session saved to {path})")
+        log_lines.clear()
 
 
 def main() -> None:
