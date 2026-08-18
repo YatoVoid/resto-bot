@@ -5,6 +5,7 @@ import os
 import anthropic
 
 from restobot.config import Location, Restaurant
+from restobot.i18n import SUPPORTED_LANGUAGES
 
 MODEL = "claude-haiku-4-5-20251001"
 MAX_TOKENS = 300
@@ -42,14 +43,21 @@ def build_tool_schema(restaurant: Restaurant) -> dict:
                 },
                 "reply": {
                     "type": "string",
-                    "description": "Short WhatsApp-style reply to send the guest, one or two sentences.",
+                    "description": "Short WhatsApp-style reply to send the guest, one or two sentences, "
+                                    "written in the language field below.",
+                },
+                "language": {
+                    "type": "string",
+                    "enum": list(SUPPORTED_LANGUAGES),
+                    "description": "The language the guest just wrote in: en (English), ru (Russian), "
+                                    "or az (Azerbaijani). Always match this in your reply.",
                 },
                 "slots": {
                     "type": "object",
                     "properties": slot_properties,
                 },
             },
-            "required": ["intent", "reply"],
+            "required": ["intent", "reply", "language"],
         },
     }
 
@@ -115,7 +123,10 @@ def build_system_prompt(restaurant: Restaurant) -> str:
         "state a price using the pricing list above, word for word if possible. Never "
         "mention internal table numbers or IDs (like 'D-G1') to the guest, even if they "
         "ask, that's staff-only. Only describe seating by its general area, window, "
-        "patio, private, or regular."
+        "patio, private, or regular.\n\n"
+        "You understand English, Russian, and Azerbaijani. Reply in whichever one the "
+        "guest is currently writing in, even if the conversation started in a different "
+        "language, switch the moment they switch. Never mix two languages in one reply."
     )
     return prompt
 

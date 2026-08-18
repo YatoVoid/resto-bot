@@ -61,6 +61,20 @@ def test_tool_schema_includes_location_when_multiple_locations():
     assert set(slot_props["location"]["enum"]) == {loc.name for loc in r.locations}
 
 
+def test_tool_schema_requires_language_with_en_ru_az():
+    r = load_restaurant(DEMO_PATH)
+    schema = build_tool_schema(r)["input_schema"]
+    assert set(schema["properties"]["language"]["enum"]) == {"en", "ru", "az"}
+    assert "language" in schema["required"]
+
+
+def test_system_prompt_mentions_supported_languages():
+    r = load_restaurant(DEMO_PATH)
+    prompt = build_system_prompt(r)
+    assert "Russian" in prompt
+    assert "Azerbaijani" in prompt
+
+
 def test_tool_schema_omits_location_for_single_location_restaurant():
     r = load_restaurant(DEMO_PATH)
     single = r.__class__(

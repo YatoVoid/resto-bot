@@ -6,27 +6,44 @@ from typing import Callable
 
 from restobot.availability import Booking, BookingError
 from restobot.config import Location, Restaurant, Table
+from restobot.i18n import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, t
 from restobot.nlu_stub import extract_party_size
 
-FORWARD_MSG = "Forwarding to the manager"
-CANT_HELP_MSG = "Can't help with that here, sorry."
-TROUBLE_MSG = "Having trouble understanding that, can you try again?"
+FORWARD_MSG = t("forward", "en")
+CANT_HELP_MSG = t("cant_help", "en")
+TROUBLE_MSG = t("trouble", "en")
+LIMIT_REACHED_MSG = t("limit_reached", "en")
 EXTEND_MINUTES = 30
 SESSION_TIMEOUT_SECONDS = 5 * 60
 MAX_LLM_CALLS_PER_SESSION = 40
-LIMIT_REACHED_MSG = "This is taking a while, let me get a person to help you directly."
 
-# whole-word triggers, matched with a boundary on both sides
+# whole-word triggers, matched with a boundary on both sides. Mixes English,
+# Russian, and Azerbaijani phrasing for the same topics so the deterministic
+# safety net still catches sensitive topics regardless of what language the
+# guest is writing in, not just whatever the LLM happens to detect.
 MANAGER_FALLBACK_EXACT = (
     "can't make it", "cant make it", "parking", "wifi", "wi-fi",
     "dress code", "wheelchair", "accessible", "discount", "private event",
     "high chair", "kids menu", "child menu", "gluten", "vegan", "vegetarian",
     "pet", "dog", "allergic", "allergy",
+    # Russian
+    "аллергия", "аллергик", "глютен", "веган", "парковка", "вайфай", "вай-фай",
+    "дресс-код", "дресс код", "скидка", "частное мероприятие", "детский стул",
+    "детское меню", "инвалид", "коляска",
+    # Azerbaijani
+    "allergiya", "qluten", "vegan", "parkinq", "avtodayanacaq", "geyim qaydası",
+    "əlil arabası", "əlçatan", "uşaq stulu", "uşaq menyusu", "endirim",
+    "özəl tədbir", "ev heyvanı",
 )
 
 # word stems, matched with a boundary only on the left so complaining,
-# complaint, reschedule, rescheduling, cancellation all still hit
-MANAGER_FALLBACK_PREFIXES = ("complain", "reschedul", "cancel")
+# complaint, reschedule, rescheduling, cancellation all still hit, plus
+# Russian and Azerbaijani stems for the same three topics
+MANAGER_FALLBACK_PREFIXES = (
+    "complain", "reschedul", "cancel",
+    "жалоб", "перенос", "перенес", "отмен",
+    "şikayət", "təxir", "ləğv",
+)
 
 # topics a restaurant can opt out of forwarding by filling in the matching
 # amenities key in its config, everything else in MANAGER_FALLBACK_EXACT
@@ -43,6 +60,22 @@ AMENITY_TOPICS = {
     "child menu": "kids_menu",
     "pet": "pets",
     "dog": "pets",
+    "парковка": "parking",
+    "вайфай": "wifi",
+    "вай-фай": "wifi",
+    "дресс-код": "dress_code",
+    "дресс код": "dress_code",
+    "инвалид": "accessible",
+    "коляска": "accessible",
+    "детский стул": "high_chair",
+    "детское меню": "kids_menu",
+    "parkinq": "parking",
+    "avtodayanacaq": "parking",
+    "geyim qaydası": "dress_code",
+    "əlil arabası": "accessible",
+    "əlçatan": "accessible",
+    "uşaq stulu": "high_chair",
+    "uşaq menyusu": "kids_menu",
 }
 
 PARTY_THRESHOLD_RE = re.compile(r"party of (\d+) or more", re.IGNORECASE)
@@ -51,8 +84,17 @@ AFFIRMATIVE = (
     "yes", "yes please", "yep", "yeah", "yup", "confirm", "confirmed", "correct",
     "sounds good", "go ahead", "book it", "that's right", "thats right",
     "perfect", "looks good", "all good", "good to go",
+    "да", "давай", "хорошо", "ок", "окей", "подтверждаю", "верно", "го",
+    "bəli", "hə", "yaxşı", "oldu", "təsdiq", "təsdiqləyirəm", "düzdür",
 )
-NEGATIVE = ("no", "nope", "cancel", "don't book it", "dont book it", "stop", "not yet")
+NEGATIVE = (
+    "no", "nope", "cancel", "don't book it", "dont book it", "stop", "not yet",
+    "нет", "не надо", "отмена", "отменить", "неправильно",
+    "yox", "xeyr", "ləğv et", "səhvdir",
+)
+
+CYRILLIC_RE = re.compile(r"[а-яёА-ЯЁ]")
+AZERBAIJANI_RE = re.compile(r"[əƏğĞıİöÖüÜşŞçÇ]")
 
 MAX_HISTORY = 8
 
@@ -62,13 +104,21 @@ AVAILABILITY_SLOTS = {"party_size", "date", "time", "area"}
 
 
 def _is_affirmative(text: str) -> bool:
-    t = text.strip().lower().rstrip(".!")
-    return t in AFFIRMATIVE or t.startswith("yes")
+    lowered = text.strip().lower().rstrip(".!")
+    return lowered in AFFIRMATIVE or lowered.startswith("yes")
 
 
 def _is_negative(text: str) -> bool:
-    t = text.strip().lower().rstrip(".!")
-    return t in NEGATIVE
+    lowered = text.strip().lower().rstrip(".!")
+    return lowered in NEGATIVE
+
+
+def _guess_language(text: str) -> str | None:
+    if CYRILLIC_RE.search(text):
+        return "ru"
+    if AZERBAIJANI_RE.search(text):
+        return "az"
+    return None
 
 
 class Engine:
@@ -86,6 +136,7 @@ class Engine:
         self.candidates: list[Table] = []
         self.awaiting_confirmation = False
         self.llm_calls = 0
+        self.language = DEFAULT_LANGUAGE
 
     def _remember(self, speaker: str, text: str) -> None:
         self.history.append(f"{speaker}: {text}")
@@ -98,6 +149,7 @@ class Engine:
         self.candidates = []
         self.awaiting_confirmation = False
         self.llm_calls = 0
+        self.language = DEFAULT_LANGUAGE
         if not self.restaurant.single_location():
             self.location = None
 
@@ -107,7 +159,7 @@ class Engine:
         if any(trigger in lowered for trigger in triggers):
             return True
         for topic in MANAGER_FALLBACK_EXACT:
-            if not re.search(rf"\b{topic}\b", lowered):
+            if not re.search(rf"\b{re.escape(topic)}\b", lowered):
                 continue
             amenity_key = AMENITY_TOPICS.get(topic)
             if amenity_key and self.location and self.location.amenities.get(amenity_key):
@@ -132,11 +184,16 @@ class Engine:
             self._reset_session()
         self.last_activity = now
 
+        guessed = _guess_language(text)
+        if guessed:
+            self.language = guessed
+
         self._remember("guest", text)
 
         if self._is_manager_topic(text):
-            self._remember("assistant", FORWARD_MSG)
-            return FORWARD_MSG
+            reply = t("forward", self.language)
+            self._remember("assistant", reply)
+            return reply
 
         if self.awaiting_confirmation:
             if _is_affirmative(text):
@@ -147,14 +204,15 @@ class Engine:
                 self.awaiting_confirmation = False
                 self.slots = {}
                 self.candidates = []
-                reply = "No worries, cancelled that. Anything else I can help with?"
+                reply = t("cancelled", self.language)
                 self._remember("assistant", reply)
                 return reply
             self.awaiting_confirmation = False
 
         if self.llm_calls >= MAX_LLM_CALLS_PER_SESSION:
-            self._remember("assistant", LIMIT_REACHED_MSG)
-            return LIMIT_REACHED_MSG
+            reply = t("limit_reached", self.language)
+            self._remember("assistant", reply)
+            return reply
         self.llm_calls += 1
 
         try:
@@ -163,8 +221,13 @@ class Engine:
                 known_slots["location"] = self.location.name
             result = self.understand(self.history[:-1], text, known_slots)
         except Exception:
-            self._remember("assistant", TROUBLE_MSG)
-            return TROUBLE_MSG
+            reply = t("trouble", self.language)
+            self._remember("assistant", reply)
+            return reply
+
+        detected_language = result.get("language")
+        if detected_language in SUPPORTED_LANGUAGES:
+            self.language = detected_language
 
         intent = result.get("intent")
         extracted = dict(result.get("slots") or {})
@@ -184,11 +247,11 @@ class Engine:
                 return reply
 
         if intent == "manager":
-            reply = FORWARD_MSG
+            reply = t("forward", self.language)
         elif intent == "irrelevant":
-            reply = CANT_HELP_MSG
+            reply = t("cant_help", self.language)
         elif intent == "question":
-            reply = result.get("reply", CANT_HELP_MSG)
+            reply = result.get("reply") or t("cant_help", self.language)
         elif intent == "extend":
             reply = self._handle_extend(extracted, result.get("reply", ""))
         elif intent == "booking":
@@ -198,14 +261,14 @@ class Engine:
             self.slots.update({k: v for k, v in extracted.items() if v})
             reply = self._continue_booking(fallback_reply=result.get("reply", ""))
         else:
-            reply = result.get("reply", CANT_HELP_MSG)
+            reply = result.get("reply") or t("cant_help", self.language)
 
         self._remember("assistant", reply)
         return reply
 
     def _ask_location_reply(self) -> str:
         names = ", ".join(loc.name for loc in self.restaurant.locations)
-        return f"Which location did you mean, {names}?"
+        return t("ask_location", self.language, names=names)
 
     def _narrow_candidates(self) -> list[Table]:
         candidates = self.candidates
@@ -224,7 +287,7 @@ class Engine:
     def _continue_booking(self, fallback_reply: str = "") -> str:
         missing = [k for k in ("party_size", "date", "time") if k not in self.slots]
         if missing:
-            return fallback_reply or "What else do you need to tell me, party size, date or time?"
+            return fallback_reply or t("ask_missing_booking_info", self.language)
 
         if "table_id" not in self.slots:
             if not self.candidates:
@@ -234,7 +297,7 @@ class Engine:
                 )
                 if not self.candidates:
                     self.slots.pop("time", None)
-                    return "Nothing free at that time, want to try a different time?"
+                    return t("nothing_free", self.language)
 
             narrowed = self._narrow_candidates() or self.candidates
             chosen = narrowed[0]
@@ -242,16 +305,17 @@ class Engine:
             self.slots["area"] = chosen.area
 
         if "name" not in self.slots:
-            return "What name should I put it under?"
+            return t("ask_name", self.language)
 
         self.awaiting_confirmation = True
         return self._confirmation_summary()
 
     def _confirmation_summary(self) -> str:
-        return (
-            f"Just to confirm: table for {self.slots['party_size']} at {self.location.name}, "
-            f"{self.slots['date']} at {self.slots['time']}, {self.slots['area']} seating, "
-            f"under {self.slots['name']}. Shall I book it, or is there anything to change?"
+        return t(
+            "confirm_booking", self.language,
+            party_size=self.slots["party_size"], location=self.location.name,
+            date=self.slots["date"], time=self.slots["time"],
+            area=self.slots["area"], name=self.slots["name"],
         )
 
     def _finish_booking(self) -> str:
@@ -265,12 +329,13 @@ class Engine:
         except BookingError as e:
             self.slots.pop("table_id", None)
             self.candidates = []
-            return f"Couldn't book that, {e}."
+            return t("booking_failed", self.language, error=str(e))
 
-        summary = (
-            f"Booked. {self.restaurant.name}, {self.location.address}. "
-            f"{reservation.date} at {reservation.time}, {area} seating, "
-            f"party of {reservation.party_size}, under {reservation.name}."
+        summary = t(
+            "booked", self.language,
+            restaurant=self.restaurant.name, address=self.location.address,
+            date=reservation.date, time=reservation.time, area=area,
+            party_size=reservation.party_size, name=reservation.name,
         )
         self.slots = {}
         self.candidates = []
@@ -281,14 +346,12 @@ class Engine:
         name = self.extend_slots.get("name")
         date = self.extend_slots.get("date")
         if not name or not date:
-            return fallback_reply or (
-                "Who's the reservation under, and for what date? Need your name to confirm it's you."
-            )
+            return fallback_reply or t("ask_extend_info", self.language)
 
         try:
             updated = self.booking.extend(name, date, EXTEND_MINUTES)
         except BookingError as e:
-            return f"Couldn't extend that, {e}."
+            return t("extend_failed", self.language, error=str(e))
 
         self.extend_slots = {}
-        return f"Extended, {updated.name}'s table now runs {updated.duration_minutes} minutes."
+        return t("extended", self.language, name=updated.name, duration=updated.duration_minutes)
