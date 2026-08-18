@@ -68,16 +68,14 @@ def test_texting_shorthand_books_a_table_end_to_end(restaurant, downtown):
     engine = _fresh_engine(restaurant, downtown)
 
     r1 = engine.handle_message("tbl for 2 2moro at 7pm")
-    assert "Open right now" in r1 or "Booked" in r1
-
-    if "Open right now" in r1:
-        r1 = engine.handle_message("D-G1")
-
     assert "What name" in r1
 
     r2 = engine.handle_message("its wali")
-    assert r2.startswith("Booked.")
-    assert "party of 2" in r2
+    assert "Just to confirm" in r2
+
+    r3 = engine.handle_message("yes")
+    assert r3.startswith("Booked.")
+    assert "party of 2" in r3
 
 
 def test_long_rambling_message_books_a_table_end_to_end(restaurant, downtown):
@@ -88,16 +86,14 @@ def test_long_rambling_message_books_a_table_end_to_end(restaurant, downtown):
         "nice if possible thanks"
     )
     r1 = engine.handle_message(text)
-    assert "Open right now" in r1 or "Booked" in r1
-
-    if "Open right now" in r1:
-        r1 = engine.handle_message("D-U1")
-
     assert "What name" in r1
 
     r2 = engine.handle_message("my name is Sam")
-    assert r2.startswith("Booked.")
-    assert "party of 2" in r2
+    assert "Just to confirm" in r2
+
+    r3 = engine.handle_message("yes")
+    assert r3.startswith("Booked.")
+    assert "party of 2" in r3
 
 
 def test_long_formal_message_books_a_table_end_to_end(restaurant, downtown):
@@ -109,13 +105,13 @@ def test_long_formal_message_books_a_table_end_to_end(restaurant, downtown):
         "window if available"
     )
     r1 = engine.handle_message(text)
-    assert "Nothing matches that preference" in r1
-    assert "area" not in engine.slots
-
-    r1 = engine.handle_message("D-G3")
     assert "What name" in r1
+    assert "D-" not in r1
 
     r2 = engine.handle_message("name is Alice")
-    assert r2.startswith("Booked.")
-    assert "party of 4" in r2
-    assert "19:30" in r2
+    assert "Just to confirm" in r2
+
+    r3 = engine.handle_message("yes")
+    assert r3.startswith("Booked.")
+    assert "party of 4" in r3
+    assert "19:30" in r3

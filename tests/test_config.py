@@ -205,3 +205,37 @@ locations: []
             load_restaurant(path)
     finally:
         os.unlink(path)
+
+
+def test_amenities_are_parsed_when_present():
+    yaml_text = """
+name: Amenity Place
+locations:
+  - name: Main
+    address: 1 Main St
+    hours: "Mon-Sun 9-5"
+    amenities:
+      parking: free lot behind the building
+      wifi: "network Guest, password guest123"
+    floors:
+      - name: Ground floor
+        tables:
+          - id: T1
+            capacity: 2
+            area: regular
+"""
+    with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as f:
+        f.write(yaml_text)
+        path = f.name
+    try:
+        restaurant = load_restaurant(path)
+        location = restaurant.locations[0]
+        assert location.amenities["parking"] == "free lot behind the building"
+        assert location.amenities["wifi"] == "network Guest, password guest123"
+    finally:
+        os.unlink(path)
+
+
+def test_amenities_default_to_empty_dict():
+    r = load_restaurant(DEMO_PATH)
+    assert r.locations[0].amenities == {}

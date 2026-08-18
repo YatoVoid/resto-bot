@@ -30,6 +30,7 @@ class Location:
     hours: str
     floors: list[Floor]
     busy_hours: str = ""
+    amenities: dict[str, str] = field(default_factory=dict)
 
     def all_tables(self) -> list[Table]:
         return [t for f in self.floors for t in f.tables]
@@ -121,6 +122,7 @@ def _build_location(raw: dict, ctx: str) -> Location:
         hours=str(_require(raw, "hours", ctx)),
         floors=floors,
         busy_hours=str(raw.get("busy_hours", "")),
+        amenities={str(k): str(v) for k, v in (raw.get("amenities") or {}).items()},
     )
 
 

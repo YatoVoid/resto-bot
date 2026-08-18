@@ -1,4 +1,5 @@
 import os
+from dataclasses import replace
 
 import pytest
 
@@ -71,7 +72,7 @@ def test_question_intent_passes_model_reply_through(restaurant, downtown):
     assert reply == "We're open Tue-Sun noon to 11."
 
 
-def test_area_with_no_matching_candidates_does_not_loop_forever(restaurant, downtown):
+def test_area_with_no_matching_candidates_falls_back_to_any_open_table(restaurant, downtown):
     stub = StubUnderstander([
         {"intent": "booking", "reply": "What date works?",
          "slots": {"party_size": 4}},
@@ -83,17 +84,12 @@ def test_area_with_no_matching_candidates_does_not_loop_forever(restaurant, down
 
     engine.handle_message("table for 4")
     engine.handle_message("august 10th")
-    r3 = engine.handle_message("2pm")
-    assert "Open right now" in r3
+    engine.handle_message("2pm")
 
     r4 = engine.handle_message("next to window")
-
-    assert "Nothing matches that preference" in r4
-    assert "table_id" not in engine.slots
-    assert "area" not in engine.slots
-
-    r5 = engine.handle_message("D-G3")
-    assert "What name" in r5
+    assert "table_id" in engine.slots
+    assert engine.slots["area"] == "regular"
+    assert "D-" not in r4 and "-U" not in r4
 
 
 def test_floor_and_area_narrow_candidates_together(restaurant, downtown):
@@ -108,9 +104,7 @@ def test_floor_and_area_narrow_candidates_together(restaurant, downtown):
 
     engine.handle_message("a spot on the second floor for 2")
     engine.handle_message("august 10th")
-    r3 = engine.handle_message("7pm")
-    assert "D-U1" in r3 and "D-U2" in r3 and "D-U3" in r3
-    assert "D-G1" not in r3
+    engine.handle_message("7pm")
 
     r4 = engine.handle_message("next to window")
     assert engine.slots["table_id"] == "D-U3"
@@ -131,18 +125,19 @@ def test_mid_booking_gibberish_re_asks_current_missing_field(restaurant, downtow
     assert r2 == "What date?"
 
 
-def test_table_id_matches_without_dash_or_case(restaurant, downtown):
-    engine = Engine(restaurant, downtown, StubUnderstander([]))
+def test_table_id_and_area_are_auto_assigned_without_asking(restaurant, downtown):
+    stub = StubUnderstander([{"intent": "booking", "reply": "", "slots": {}}])
+    engine = Engine(restaurant, downtown, stub)
     engine.slots = {"party_size": 2, "date": "2026-08-10", "time": "19:00"}
-    engine.candidates = [t for t in downtown.all_tables() if t.id == "D-G1"]
 
-    reply = engine.handle_message("dg1")
+    reply = engine.handle_message("does not matter, slots already complete")
 
-    assert engine.slots["table_id"] == "D-G1"
+    assert "table_id" in engine.slots
+    assert "area" in engine.slots
     assert "What name" in reply
 
 
-def test_full_booking_flow_produces_accurate_summary(restaurant, downtown):
+def test_full_booking_flow_asks_for_confirmation_before_booking(restaurant, downtown):
     stub = StubUnderstander([
         {"intent": "booking", "reply": "What date works?",
          "slots": {"party_size": 2, "area": "window"}},
@@ -159,22 +154,49 @@ def test_full_booking_flow_produces_accurate_summary(restaurant, downtown):
     assert r2 == "What time?"
 
     r3 = engine.handle_message("7pm")
-    assert "Open right now" in r3 or "Booked" in r3
-
-    if "Open right now" in r3:
-        r3 = engine.handle_message("D-G1")
-
     assert "What name" in r3
 
     r4 = engine.handle_message("Alice")
+    assert "Just to confirm" in r4
+    assert "window" in r4
+    assert "D-" not in r4
+    assert engine.awaiting_confirmation is True
+    assert len(engine.booking.reservations) == 0
 
-    assert r4.startswith("Booked.")
-    assert "Nonna Rosa" in r4
-    assert "14 Baker Street" in r4
-    assert "2026-08-10 at 19:00" in r4
-    assert "party of 2" in r4
-    assert "under Alice" in r4
+    r5 = engine.handle_message("yes")
+
+    assert r5.startswith("Booked.")
+    assert "Nonna Rosa" in r5
+    assert "14 Baker Street" in r5
+    assert "2026-08-10 at 19:00" in r5
+    assert "party of 2" in r5
+    assert "under Alice" in r5
+    assert "D-" not in r5
     assert len(engine.booking.reservations) == 1
+    assert engine.awaiting_confirmation is False
+
+
+def test_declining_confirmation_cancels_and_clears_slots(restaurant, downtown):
+    stub = StubUnderstander([
+        {"intent": "booking", "reply": "What date works?", "slots": {"party_size": 2}},
+        {"intent": "booking", "reply": "What time?", "slots": {"date": "2026-08-10"}},
+        {"intent": "booking", "reply": "", "slots": {"time": "19:00"}},
+        {"intent": "booking", "reply": "", "slots": {"name": "Alice"}},
+    ])
+    engine = Engine(restaurant, downtown, stub)
+
+    engine.handle_message("table for 2")
+    engine.handle_message("august 10th")
+    engine.handle_message("7pm")
+    r4 = engine.handle_message("Alice")
+    assert "Just to confirm" in r4
+
+    r5 = engine.handle_message("no")
+
+    assert "cancelled" in r5.lower()
+    assert engine.slots == {}
+    assert engine.awaiting_confirmation is False
+    assert len(engine.booking.reservations) == 0
 
 
 def test_two_bookings_in_one_session_both_succeed(restaurant, downtown):
@@ -192,22 +214,20 @@ def test_two_bookings_in_one_session_both_succeed(restaurant, downtown):
     ])
     engine = Engine(restaurant, downtown, stub)
 
-    r1 = engine.handle_message("table for 2 by the window")
-    r2 = engine.handle_message("august 10th")
-    r3 = engine.handle_message("7pm")
-    if "Open right now" in r3:
-        r3 = engine.handle_message("D-G1")
-    r4 = engine.handle_message("Alice")
+    engine.handle_message("table for 2 by the window")
+    engine.handle_message("august 10th")
+    engine.handle_message("7pm")
+    engine.handle_message("Alice")
+    r4 = engine.handle_message("yes")
     assert r4.startswith("Booked.")
     assert engine.slots == {}
     assert engine.candidates == []
 
-    r5 = engine.handle_message("table for 2 by the window again")
-    r6 = engine.handle_message("august 11th")
-    r7 = engine.handle_message("7pm")
-    if "Open right now" in r7:
-        r7 = engine.handle_message("D-G1")
-    r8 = engine.handle_message("Bob")
+    engine.handle_message("table for 2 by the window again")
+    engine.handle_message("august 11th")
+    engine.handle_message("7pm")
+    engine.handle_message("Bob")
+    r8 = engine.handle_message("yes")
 
     assert r8.startswith("Booked.")
     assert "2026-08-11 at 19:00" in r8
@@ -265,3 +285,105 @@ def test_engine_recovers_after_a_failed_call(restaurant, downtown):
 
     assert first == TROUBLE_MSG
     assert second == "We're open noon to 11."
+
+
+def test_resolved_location_is_fed_back_to_the_understander(restaurant):
+    stub = StubUnderstander([
+        {"intent": "question", "reply": "We're at 14 Baker Street.", "slots": {"location": "Downtown"}},
+        {"intent": "question", "reply": "We're open Tue-Sun.", "slots": {}},
+    ])
+    engine = Engine(restaurant, None, stub)
+
+    engine.handle_message("where's the downtown one")
+    engine.handle_message("what are your hours")
+
+    assert stub.calls[1][2]["location"] == "Downtown"
+
+
+def test_idle_session_past_timeout_forgets_conversation(restaurant, downtown):
+    clock = {"t": 0.0}
+    stub = StubUnderstander([
+        {"intent": "booking", "reply": "What date works?", "slots": {"party_size": 2}},
+        {"intent": "booking", "reply": "How many people?", "slots": {}},
+    ])
+    engine = Engine(restaurant, downtown, stub, now_fn=lambda: clock["t"])
+
+    engine.handle_message("table for 2")
+    assert engine.slots == {"party_size": 2}
+
+    clock["t"] += 301
+    engine.handle_message("still there?")
+
+    assert engine.slots == {}
+    assert engine.history == ["guest: still there?", "assistant: How many people?"]
+
+
+def test_active_session_within_timeout_keeps_state(restaurant, downtown):
+    clock = {"t": 0.0}
+    stub = StubUnderstander([
+        {"intent": "booking", "reply": "What date works?", "slots": {"party_size": 2}},
+        {"intent": "booking", "reply": "What time?", "slots": {"date": "2026-08-10"}},
+    ])
+    engine = Engine(restaurant, downtown, stub, now_fn=lambda: clock["t"])
+
+    engine.handle_message("table for 2")
+    clock["t"] += 200
+    engine.handle_message("august 10th")
+
+    assert engine.slots == {"party_size": 2, "date": "2026-08-10"}
+
+
+def test_extend_requires_fresh_name_even_if_a_prior_booking_named_someone(restaurant, downtown):
+    engine = Engine(restaurant, downtown, StubUnderstander([]))
+    engine.booking.book("Downtown", "D-G3", "2026-08-10", "19:00", 4, "Alice", duration_minutes=90)
+    engine.slots = {"name": "Alice"}
+
+    engine.understand = StubUnderstander([
+        {"intent": "extend", "reply": "", "slots": {"date": "2026-08-10"}},
+    ])
+
+    reply = engine.handle_message("can you extend our table on the 10th")
+
+    assert reply != "Extended, Alice's table now runs 120 minutes."
+    assert "name" in reply.lower() or "who" in reply.lower()
+
+
+def test_llm_call_cap_stops_burning_tokens_and_forwards_instead(restaurant, downtown):
+    from restobot.engine import MAX_LLM_CALLS_PER_SESSION, LIMIT_REACHED_MSG
+
+    stub = StubUnderstander([
+        {"intent": "irrelevant", "reply": "", "slots": {}}
+        for _ in range(MAX_LLM_CALLS_PER_SESSION)
+    ])
+    engine = Engine(restaurant, downtown, stub)
+
+    for _ in range(MAX_LLM_CALLS_PER_SESSION):
+        engine.handle_message("hello")
+
+    assert len(stub.calls) == MAX_LLM_CALLS_PER_SESSION
+
+    reply = engine.handle_message("hello again")
+
+    assert reply == LIMIT_REACHED_MSG
+    assert len(stub.calls) == MAX_LLM_CALLS_PER_SESSION
+
+
+def test_configured_amenity_is_answered_instead_of_forwarded(restaurant):
+    downtown = restaurant.get_location("Downtown")
+    downtown_with_parking = replace(downtown, amenities={"parking": "free lot behind the building"})
+    stub = StubUnderstander([
+        {"intent": "question", "reply": "Yes, free lot behind the building.", "slots": {}},
+    ])
+    engine = Engine(restaurant, downtown_with_parking, stub)
+
+    reply = engine.handle_message("do you have parking")
+
+    assert reply == "Yes, free lot behind the building."
+
+
+def test_unconfigured_amenity_still_forwards(restaurant, downtown):
+    engine = Engine(restaurant, downtown, StubUnderstander([]))
+
+    reply = engine.handle_message("do you have parking")
+
+    assert reply == FORWARD_MSG

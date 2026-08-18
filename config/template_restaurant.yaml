@@ -1,6 +1,9 @@
 # Copy this file, fill in your own details, point --config at it.
-# Delete anything you don't need. manager_triggers and price_note are
-# both optional, leave them out entirely if they don't apply.
+# Delete anything you don't need. manager_triggers, price_note, notes,
+# and amenities are all optional, leave them out entirely if they don't
+# apply. Any amenities key you fill in gets answered directly instead
+# of forwarded to a person, valid keys: parking, wifi, dress_code,
+# accessible, high_chair, kids_menu, pets.
 
 name: Your Restaurant Name
 cuisine: what kind of food you serve
@@ -15,6 +18,9 @@ locations:
     address: 123 Main Street
     hours: "Mon-Sun 11:00-22:00"
     busy_hours: "Fri-Sat evenings fill up fast"
+    amenities:
+      parking: "free lot behind the building"
+      wifi: "network Guest, password guest123"
     floors:
       - name: Ground floor
         tables:

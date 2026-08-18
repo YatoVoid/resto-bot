@@ -7,44 +7,12 @@ from datetime import datetime
 
 import yaml
 
-from restobot.config import ConfigError, Restaurant, Location, load_restaurant
-from restobot.engine import Engine, UnderstandFn
-from restobot.offline import build_offline_understander
+from restobot import llm
+from restobot.config import ConfigError, Restaurant, load_restaurant
+from restobot.engine import Engine
 
 DEFAULT_CONFIG = "config/demo_restaurant.yaml"
 LOG_DIR = "logs"
-
-
-def pick_location(restaurant: Restaurant) -> Location:
-    if restaurant.single_location():
-        return restaurant.locations[0]
-
-    names = ", ".join(loc.name for loc in restaurant.locations)
-    print(f"We have a few locations: {names}. Which one?")
-    while True:
-        reply = input("> ").strip()
-        if reply.lower() in ("quit", "exit"):
-            sys.exit(0)
-        for loc in restaurant.locations:
-            if loc.name.lower() in reply.lower() or reply.lower() in loc.name.lower():
-                return loc
-        print(f"Didn't catch that. Pick one of: {names}")
-
-
-def build_understander(restaurant: Restaurant, location: Location) -> tuple[UnderstandFn, bool]:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if api_key:
-        from restobot import llm
-
-        client = llm.build_client()
-        system_prompt = llm.build_system_prompt(restaurant, location)
-
-        def understand(history, text, known_slots):
-            return llm.classify_turn(client, system_prompt, history, text, known_slots)
-
-        return understand, True
-
-    return build_offline_understander(restaurant, location), False
 
 
 def save_session_log(restaurant: Restaurant, lines: list[str]) -> str:
@@ -68,19 +36,19 @@ def run(config_path: str) -> None:
         print(f"That config file has a problem: {e}")
         sys.exit(1)
 
-    print(f"{restaurant.name}, how can I help?")
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        print("ANTHROPIC_API_KEY is not set, export it and try again.")
+        sys.exit(1)
 
-    location = pick_location(restaurant)
-    understand_fn, live = build_understander(restaurant, location)
-    if not live:
-        print("(no ANTHROPIC_API_KEY set, running in offline mode)")
-        print("What would you like to do?")
-        print("  1) Book a table")
-        print("  2) Ask about hours, address, menu, or prices")
-        print("  3) Extend an existing reservation")
-        print("Just tell me in your own words, or say quit to leave.")
+    client = llm.build_client()
+    system_prompt = llm.build_system_prompt(restaurant)
+    tool_schema = llm.build_tool_schema(restaurant)
 
-    engine = Engine(restaurant, location, understand_fn)
+    def understand(history, text, known_slots):
+        return llm.classify_turn(client, system_prompt, tool_schema, history, text, known_slots)
+
+    location = restaurant.locations[0] if restaurant.single_location() else None
+    engine = Engine(restaurant, location, understand)
     log_lines: list[str] = []
 
     while True:
